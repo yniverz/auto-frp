@@ -126,9 +126,9 @@ def check_server():
     while not stop_event.wait(60):
         try:
             base = CONFIG.master_base_url.rstrip('/')
-            url = f"{base}/api/gateway/{CONFIG.type}/{CONFIG.id}?token={CONFIG.master_token}"
+            url = f"{base}/api/gateway/{CONFIG.type}/{CONFIG.id}"
             print(url)
-            response = requests.get(url)
+            response = requests.get(url, headers={'X-Gateway-Token': CONFIG.master_token})
             if response.status_code != 200:
                 print(f"Server returned status code {response.status_code}. Ignoring...")
                 continue
