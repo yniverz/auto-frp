@@ -1,0 +1,47 @@
+#!/bin/bash
+
+SERVICE_NAME="auto-frp"
+CONFIG_FILE="/opt/$SERVICE_NAME/config.toml"
+
+# Function to display help message
+show_help() {
+    echo "Usage: auto-frp-config [OPTION]"
+    echo "Edit configuration file and restart services if changes are detected."
+    echo ""
+    echo "Options:"
+    echo "  -l, --log   Display log file"
+    echo "  -h, --help   Display this help message"
+    exit 0
+}
+
+# Handle command-line arguments
+case "$1" in
+    -l|--log) tail -f /var/log/$SERVICE_NAME.log ;;
+    -h|--help) show_help ;;
+    "") ;;  # No argument, default behavior
+    *) echo "Invalid option: $1" && show_help ;;
+esac
+
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "Error: Config file $CONFIG_FILE does not exist."
+    exit 1
+fi
+
+# Calculate initial checksum
+OLD_CHECKSUM=$(sha256sum "$CONFIG_FILE" | awk '{print $1}')
+
+# Open config file in nano
+nano "$CONFIG_FILE"
+
+# Calculate new checksum
+NEW_CHECKSUM=$(sha256sum "$CONFIG_FILE" | awk '{print $1}')
+
+# Compare checksums
+if [ "$OLD_CHECKSUM" != "$NEW_CHECKSUM" ]; then
+    echo "Config changed. Restarting $SERVICE_NAME service and Python script..."
+    sudo systemctl restart "$SERVICE_NAME"
+    
+    echo "$SERVICE_NAME and Python script have been restarted."
+else
+    echo "No changes detected. Service and script will not be restarted."
+fi
