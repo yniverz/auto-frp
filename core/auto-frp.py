@@ -125,7 +125,8 @@ restart_event = threading.Event()
 def check_server():
     while not stop_event.wait(60):
         try:
-            response = requests.get(f"{CONFIG.master_base_url}/api/{CONFIG.type}/{CONFIG.id}?token={CONFIG.master_token}", timeout=5)
+            base = CONFIG.master_base_url.rstrip('/')
+            response = requests.get(f"{base}/api/gateway/{CONFIG.type}/{CONFIG.id}?token={CONFIG.master_token}", timeout=5)
             if response.status_code != 200:
                 print(f"Server returned status code {response.status_code}. Ignoring...")
                 continue
