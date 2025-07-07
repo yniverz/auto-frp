@@ -135,6 +135,14 @@ def check_server():
 
             data = response.text.strip()
             if data:
+                # check if the config file has changed
+                with open(CONFIG_FILE, 'r') as f:
+                    current_data = f.read().strip()
+
+                if data == current_data:
+                    print("No changes detected in the config file.")
+                    continue
+
                 with open(CONFIG_FILE, 'w') as f:
                     f.write(data)
 
