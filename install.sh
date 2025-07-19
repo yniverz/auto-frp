@@ -13,7 +13,7 @@ PYTHON_BIN=$(which python3)
 echo "Installing $SERVICE_NAME..."
 
 # Step 1: Ensure Python is installed
-sudo apt update && sudo apt install -y python3 python3-venv python3-pip nano
+sudo apt-get update && sudo apt-get install -y python3 python3-venv python3-pip nano
 
 # Step 2: Create the installation directory
 sudo mkdir -p $INSTALL_DIR
