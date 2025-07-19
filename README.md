@@ -37,6 +37,8 @@ sudo ./install.sh
 By default, Auto-FRP uses a template that sets it up in **client** mode (`type="client"` in `config.toml`).  
 You can switch it to **server** mode by editing the config.
 
+You can add multiple instances in the `config.toml` file by adding more sections of `[[instances]]`.
+
 Use the helper script `auto-frp-config`:
 
 - **Edit Auto-FRP config**:
