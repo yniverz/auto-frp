@@ -3,3 +3,4 @@ type="client" # or "server"
 id="your_id" # will be used to identify the client or server
 master-base-url="https://master:8080" # base URL of the master server
 master-token="your_master_token" # token for authentication with the master server
+ssl-verify=true # whether to verify SSL certificates

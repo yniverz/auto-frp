@@ -63,6 +63,7 @@ class FRPConfig:
     id: str
     master_base_url: str
     master_token: str
+    ssl_verify: bool = True
 
     def __post_init__(self):
         if self.type not in ['client', 'server']:
@@ -82,14 +83,15 @@ class Config:
     instances: list[FRPConfig] = None
 
     @staticmethod
-    def from_toml(config: dict[str, Any]) -> 'Config':
+    def from_toml(config: dict[str, list[dict[str, Any]]]) -> 'Config':
         return Config(
             instances=[
                 FRPConfig(
                     type=cfg.get('type'),
                     id=cfg.get('id'),
                     master_base_url=cfg.get('master-base-url'),
-                    master_token=cfg.get('master-token')
+                    master_token=cfg.get('master-token'),
+                    ssl_verify=cfg.get('ssl-verify', True)
                 )
                 for cfg in config.get('instances', [])
             ]
@@ -117,7 +119,7 @@ class FRPInstance:
                 base = self.config.master_base_url.rstrip('/')
                 url = f"{base}/api/gateway/{self.config.type}/{self.config.id}"
                 print(url)
-                response = requests.get(url, headers={'X-Gateway-Token': self.config.master_token})
+                response = requests.get(url, headers={'X-Gateway-Token': self.config.master_token}, verify=self.config.ssl_verify)
                 if response.status_code != 200:
                     print(f"{self.config.id} Server returned status code {response.status_code}. Ignoring...")
                     continue
