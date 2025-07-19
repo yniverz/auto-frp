@@ -58,45 +58,125 @@ def install_latest_frp():
 
 
 @dataclass
-class Config:
+class FRPConfig:
     type: str
     id: str
     master_base_url: str
     master_token: str
 
-    @staticmethod
-    def verify_config(cfg: dict[str, Any]):
-        """
-        Verify the configuration loaded from config.toml.
+    def __post_init__(self):
+        if self.type not in ['client', 'server']:
+            raise ValueError(f"Invalid type '{self.type}' for FRPConfig, must be 'client' or 'server'")
+        if not self.id:
+            raise ValueError("FRPConfig id cannot be empty")
+        if not self.master_base_url:
+            raise ValueError("FRPConfig master_base_url cannot be empty")
+        if not self.master_token:
+            raise ValueError("FRPConfig master_token cannot be empty")
         
-        config params:
-            type: client/server
-            id: unique identifier for the client/server
-            master-base-url: base URL of the master server
-            master-token: token for authentication with the master server
-        """
+    def type_char(self) -> str:
+        return 'c' if self.type == 'client' else 's'
 
-        if 'type' not in cfg:
-            raise ValueError('Missing "type" in config.toml')
-        if cfg['type'] not in ['client', 'server']:
-            raise ValueError('Invalid "type" in config.toml, must be "client" or "server"')
-        if 'id' not in cfg:
-            raise ValueError('Missing "id" in config.toml')
-        if 'master-base-url' not in cfg:
-            raise ValueError('Missing "master-base-url" in config.toml')
-        if 'master-token' not in cfg:
-            raise ValueError('Missing "master-token" in config.toml')
-
+@dataclass
+class Config:
+    instances: list[FRPConfig] = None
 
     @staticmethod
     def from_toml(config: dict[str, Any]) -> 'Config':
-        Config.verify_config(config)
         return Config(
-            type=config.get('type'),
-            id=config.get('id'),
-            master_base_url=config.get('master-base-url'),
-            master_token=config.get('master-token')
+            instances=[
+                FRPConfig(
+                    type=cfg.get('type'),
+                    id=cfg.get('id'),
+                    master_base_url=cfg.get('master-base-url'),
+                    master_token=cfg.get('master-token')
+                )
+                for cfg in config.get('instances', [])
+            ]
         )
+
+
+
+class FRPInstance:
+    def __init__(self, base_dir, config: FRPConfig):
+        self.base_dir = base_dir
+        self.config = config
+        self.config_file = f'{self.base_dir}../{self.config.id}/config.toml'
+        self.binary_file = f'{self.base_dir}bin/frp/frp{self.config.type_char()}'
+
+        self.threads: list[threading.Thread] = []
+
+        self.stop_event = threading.Event()
+        self.restart_event = threading.Event()
+
+        os.makedirs(os.path.dirname(self.config_file), exist_ok=True)
+
+    def check_server(self):
+        while not self.stop_event.wait(60):
+            try:
+                base = self.config.master_base_url.rstrip('/')
+                url = f"{base}/api/gateway/{self.config.type}/{self.config.id}"
+                print(url)
+                response = requests.get(url, headers={'X-Gateway-Token': self.config.master_token})
+                if response.status_code != 200:
+                    print(f"{self.config.id} Server returned status code {response.status_code}. Ignoring...")
+                    continue
+
+                data = response.text.strip()
+                if data:
+                    # check if the config file has changed
+
+                    try:
+                        with open(self.config_file, 'r') as f:
+                            current_data = f.read().strip()
+                    except FileNotFoundError:
+                        current_data = ""
+
+                    if data == current_data:
+                        print(f"{self.config.id} No changes detected in the config file.")
+                        continue
+
+                    with open(self.config_file, 'w') as f:
+                        f.write(data)
+
+                self.restart_event.set()
+
+            except requests.RequestException as e:
+                print(f"{self.config.id} Failed to reach server: {e}. Restarting frp client...")
+                traceback.print_exc()
+
+
+    def frp_monitor(self):
+        """Keep an frp process alive and restart on request/failure."""
+        while not self.stop_event.is_set():
+            cmd = [self.binary_file, '-c', self.config_file]
+            try:
+                with subprocess.Popen(cmd) as proc:
+                    # poll once a second so we can notice restart/stop requests
+                    while proc.poll() is None:
+                        if self.stop_event.is_set() or self.restart_event.is_set():
+                            proc.terminate()          # or .kill() if needed
+                            proc.wait(timeout=10)
+                            break
+                        time.sleep(1)
+            except Exception:
+                print(traceback.format_exc())
+
+            if self.stop_event.is_set():
+                break
+            self.restart_event.clear()
+            print(f"{self.config.id} Restarting in 5 seconds…")
+            time.sleep(5)
+
+    def start(self):
+        self.threads = [
+            threading.Thread(target=self.frp_monitor, daemon=True),
+            threading.Thread(target=self.check_server, daemon=True),
+        ]
+
+        for t in self.threads:
+            t.start()
+
 
 
 
@@ -114,78 +194,106 @@ except Exception as e:
         exit(1)
 
 
-CLIENT = [f'{BASE}bin/frp/frpc', '-c', f'{BASE}../frpc.toml']
-SERVER = [f'{BASE}bin/frp/frps', '-c', f'{BASE}../frps.toml']
-
-CONFIG_FILE = f'{BASE}../frpc.toml' if CONFIG.type == 'client' else f'{BASE}../frps.toml'
-
-stop_event    = threading.Event()
-restart_event = threading.Event()
-
-def check_server():
-    while not stop_event.wait(60):
-        try:
-            base = CONFIG.master_base_url.rstrip('/')
-            url = f"{base}/api/gateway/{CONFIG.type}/{CONFIG.id}"
-            print(url)
-            response = requests.get(url, headers={'X-Gateway-Token': CONFIG.master_token})
-            if response.status_code != 200:
-                print(f"Server returned status code {response.status_code}. Ignoring...")
-                continue
-
-            data = response.text.strip()
-            if data:
-                # check if the config file has changed
-                with open(CONFIG_FILE, 'r') as f:
-                    current_data = f.read().strip()
-
-                if data == current_data:
-                    print("No changes detected in the config file.")
-                    continue
-
-                with open(CONFIG_FILE, 'w') as f:
-                    f.write(data)
-
-            restart_event.set()
-
-        except requests.RequestException as e:
-            print(f"Failed to reach server: {e}. Restarting frp client...")
-            traceback.print_exc()
 
 
-def frp_monitor():
-    """Keep an frp process alive and restart on request/failure."""
-    while not stop_event.is_set():
-        cmd = CLIENT if CONFIG.type == 'client' else SERVER
-        try:
-            with subprocess.Popen(cmd) as proc:
-                # poll once a second so we can notice restart/stop requests
-                while proc.poll() is None:
-                    if stop_event.is_set() or restart_event.is_set():
-                        proc.terminate()          # or .kill() if needed
-                        proc.wait(timeout=10)
-                        break
-                    time.sleep(1)
-        except Exception:
-            print(traceback.format_exc())
 
-        if stop_event.is_set():
-            break
-        restart_event.clear()
-        print("Restarting in 5 seconds…")
-        time.sleep(5)
 
-threads = [
-    threading.Thread(target=frp_monitor, daemon=True),
-    threading.Thread(target=check_server, daemon=True),
-]
-
-for t in threads: t.start()
+instances: list[FRPInstance] = []
+for instance in CONFIG.instances:
+    manager = FRPInstance(BASE, instance)
+    manager.start()
+    instances.append(manager)
 
 try:
     while True:
         time.sleep(1)
 
 except KeyboardInterrupt:
-    stop_event.set()
-    for t in threads: t.join()
+    for manager in instances:
+        manager.stop_event.set()
+
+    for manager in instances:
+        for t in manager.threads:
+            t.join()
+
+
+
+
+
+
+
+# CLIENT = [f'{BASE}bin/frp/frpc', '-c', f'{BASE}../frpc.toml']
+# SERVER = [f'{BASE}bin/frp/frps', '-c', f'{BASE}../frps.toml']
+
+# CONFIG_FILE = f'{BASE}../frpc.toml' if CONFIG.type == 'client' else f'{BASE}../frps.toml'
+
+# stop_event    = threading.Event()
+# restart_event = threading.Event()
+
+# def check_server():
+#     while not stop_event.wait(60):
+#         try:
+#             base = CONFIG.master_base_url.rstrip('/')
+#             url = f"{base}/api/gateway/{CONFIG.type}/{CONFIG.id}"
+#             print(url)
+#             response = requests.get(url, headers={'X-Gateway-Token': CONFIG.master_token})
+#             if response.status_code != 200:
+#                 print(f"Server returned status code {response.status_code}. Ignoring...")
+#                 continue
+
+#             data = response.text.strip()
+#             if data:
+#                 # check if the config file has changed
+#                 with open(CONFIG_FILE, 'r') as f:
+#                     current_data = f.read().strip()
+
+#                 if data == current_data:
+#                     print("No changes detected in the config file.")
+#                     continue
+
+#                 with open(CONFIG_FILE, 'w') as f:
+#                     f.write(data)
+
+#             restart_event.set()
+
+#         except requests.RequestException as e:
+#             print(f"Failed to reach server: {e}. Restarting frp client...")
+#             traceback.print_exc()
+
+
+# def frp_monitor():
+#     """Keep an frp process alive and restart on request/failure."""
+#     while not stop_event.is_set():
+#         cmd = CLIENT if CONFIG.type == 'client' else SERVER
+#         try:
+#             with subprocess.Popen(cmd) as proc:
+#                 # poll once a second so we can notice restart/stop requests
+#                 while proc.poll() is None:
+#                     if stop_event.is_set() or restart_event.is_set():
+#                         proc.terminate()          # or .kill() if needed
+#                         proc.wait(timeout=10)
+#                         break
+#                     time.sleep(1)
+#         except Exception:
+#             print(traceback.format_exc())
+
+#         if stop_event.is_set():
+#             break
+#         restart_event.clear()
+#         print("Restarting in 5 seconds…")
+#         time.sleep(5)
+
+# threads = [
+#     threading.Thread(target=frp_monitor, daemon=True),
+#     threading.Thread(target=check_server, daemon=True),
+# ]
+
+# for t in threads: t.start()
+
+# try:
+#     while True:
+#         time.sleep(1)
+
+# except KeyboardInterrupt:
+#     stop_event.set()
+#     for t in threads: t.join()
