@@ -38,6 +38,7 @@ By default, Auto-FRP uses a template that sets it up in **client** mode (`type="
 You can switch it to **server** mode by editing the config.
 
 You can add multiple instances in the `config.toml` file by adding more sections of `[[instances]]`.
+Check the `config.template.toml` file for an example configuration.
 
 Use the helper script `auto-frp-config`:
 
