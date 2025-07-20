@@ -1,3 +1,5 @@
+[![License: NCPUL](https://img.shields.io/badge/license-NCPUL-blue.svg)](./LICENSE.md)
+
 # Auto-FRP
 
 Auto-FRP is a simple automatic manager for [fatedier/frp](https://github.com/fatedier/frp), designed to work with [yniverz/python-nginx-dashboard](https://github.com/yniverz/python-nginx-dashboard). The dashboard allows configuration of FRP (Fast Reverse Proxy) Clients and Servers through a master server, and the Auto-FRP script will pull the latest configuration from the dashboard and apply it to the FRP client or server.
