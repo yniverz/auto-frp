@@ -103,7 +103,7 @@ class FRPInstance:
     def __init__(self, base_dir, config: FRPConfig):
         self.base_dir = base_dir
         self.config = config
-        self.config_file = f'{self.base_dir}../{self.config.id}/config.toml'
+        self.config_file = f'{self.base_dir}../config.toml'
         self.binary_file = f'{self.base_dir}bin/frp/frp{self.config.type_char()}'
 
         self.threads: list[threading.Thread] = []
@@ -111,7 +111,7 @@ class FRPInstance:
         self.stop_event = threading.Event()
         self.restart_event = threading.Event()
 
-        os.makedirs(os.path.dirname(self.config_file), exist_ok=True)
+        # os.makedirs(os.path.dirname(self.config_file), exist_ok=True)
 
     def check_server(self):
         while not self.stop_event.wait(60):
