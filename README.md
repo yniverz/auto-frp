@@ -42,6 +42,15 @@ You can switch it to **server** mode by editing the config.
 You can add multiple instances in the `config.toml` file by adding more sections of `[[instances]]`.
 Check the `config.template.toml` file for an example configuration.
 
+```toml
+[[instances]]
+type="client" # or "server"
+id="your_id" # will be used to identify the client or server
+master-base-url="https://master:8080" # base URL of the master server
+master-token="your_master_token" # token for authentication with the master server
+ssl-verify=true # whether to verify SSL certificates
+```
+
 Use the helper script `auto-frp-config`:
 
 - **Edit Auto-FRP config**:
