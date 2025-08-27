@@ -114,7 +114,9 @@ class FRPInstance:
         os.makedirs(os.path.dirname(self.config_file), exist_ok=True)
 
     def check_server(self):
-        while not self.stop_event.wait(60):
+        startup = True
+        while not self.stop_event.wait(60) or startup:
+            startup = False
             try:
                 base = self.config.master_base_url.rstrip('/')
                 url = f"{base}/api/gateway/{self.config.type}/{self.config.id}"
