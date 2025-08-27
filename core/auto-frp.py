@@ -21,7 +21,7 @@ def get_latest_frp_download_link():
     if system in ["Linux"]:
         if platform.machine().lower() == "x86_64":
             asset_type = "linux_amd64"
-        elif platform.machine().lower() == "arm64":
+        elif platform.machine().lower() in ["arm64", "aarch64"]:
             asset_type = "linux_arm64"
         else:
             raise Exception("Unsupported architecture")
