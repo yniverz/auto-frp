@@ -115,37 +115,44 @@ class FRPInstance:
 
     def check_server(self):
         startup = True
-        while not self.stop_event.wait(60) or startup:
-            startup = False
+        while True:
             try:
-                base = self.config.master_base_url.rstrip('/')
-                url = f"{base}/api/gateway/{self.config.type}/{self.config.id}"
-                print(url)
-                response = requests.get(url, headers={'X-Gateway-Token': self.config.master_token}, verify=self.config.ssl_verify)
-                if response.status_code != 200:
-                    print(f"{self.config.id} Server returned status code {response.status_code}. Ignoring...")
-                    continue
-
-                data = response.text.strip()
-                if data:
-                    # check if the config file has changed
-
+                while not self.stop_event.wait(60) or startup:
+                    startup = False
+                    base = self.config.master_base_url.rstrip('/')
+                    url = f"{base}/api/gateway/{self.config.type}/{self.config.id}"
+                    print(url)
                     try:
-                        with open(self.config_file, 'r') as f:
-                            current_data = f.read().strip()
-                    except FileNotFoundError:
-                        current_data = ""
-
-                    if data == current_data:
-                        print(f"{self.config.id} No changes detected in the config file.")
+                        response = requests.get(url, headers={'X-Gateway-Token': self.config.master_token}, verify=self.config.ssl_verify)
+                        if response.status_code != 200:
+                            print(f"{self.config.id} Server returned status code {response.status_code}. Ignoring...")
+                            continue
+                    
+                    except requests.RequestException as e:
+                        print(f"{self.config.id} Failed to reach server: {e}. Restarting frp client...")
+                        traceback.print_exc()
                         continue
 
-                    with open(self.config_file, 'w') as f:
-                        f.write(data)
+                    data = response.text.strip()
+                    if data:
+                        # check if the config file has changed
 
-                self.restart_event.set()
+                        try:
+                            with open(self.config_file, 'r') as f:
+                                current_data = f.read().strip()
+                        except FileNotFoundError:
+                            current_data = ""
 
-            except requests.RequestException as e:
+                        if data == current_data:
+                            print(f"{self.config.id} No changes detected in the config file.")
+                            continue
+
+                        with open(self.config_file, 'w') as f:
+                            f.write(data)
+
+                    self.restart_event.set()
+
+            except Exception as e:
                 print(f"{self.config.id} Failed to reach server: {e}. Restarting frp client...")
                 traceback.print_exc()
 
