@@ -117,7 +117,7 @@ class FRPInstance:
         startup = True
         while True:
             try:
-                while not self.stop_event.wait(60) or startup:
+                while startup or not self.stop_event.wait(60):
                     startup = False
                     base = self.config.master_base_url.rstrip('/')
                     url = f"{base}/api/gateway/{self.config.type}/{self.config.id}"
