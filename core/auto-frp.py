@@ -137,6 +137,13 @@ class FRPInstance:
                     if data:
                         # check if the config file has changed
 
+                        # check if valid toml
+                        try:
+                            toml.loads(data)
+                        except toml.TomlDecodeError as e:
+                            print(f"{self.config.id} Invalid TOML received from server: {e}. Ignoring...")
+                            continue
+
                         try:
                             with open(self.config_file, 'r') as f:
                                 current_data = f.read().strip()
